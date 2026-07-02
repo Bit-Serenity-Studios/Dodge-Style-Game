@@ -71,6 +71,8 @@ export type UseGameLoopArgs = {
   height: number;
   seed: number;
   callbacks: GameCallbacks;
+  /** 1 = reduce-motion active. Suppresses camera shake and freeze-frame. */
+  reduceMotionSv?: import('react-native-reanimated').SharedValue<number>;
 };
 
 /**
@@ -95,7 +97,7 @@ function usePipePool(): PipeSV[] {
   return pipes;
 }
 
-export function useGameLoop({ width, height, seed, callbacks }: UseGameLoopArgs) {
+export function useGameLoop({ width, height, seed, callbacks, reduceMotionSv }: UseGameLoopArgs) {
   // ---- Shared values (UI thread only) ----
   const phase = useSharedValue<number>(0); // 0=idle 1=playing 2=dying 3=dead
   const py = useSharedValue<number>(height / 2);
@@ -191,8 +193,9 @@ export function useGameLoop({ width, height, seed, callbacks }: UseGameLoopArgs)
     'worklet';
     if (phase.value !== 1) return;
     phase.value = 2;
-    shakeMag.value = SHAKE_DEATH;
-    hitstopUntil.value = wallTime.value * 1000 + HITSTOP_MS;
+    const rm = reduceMotionSv ? reduceMotionSv.value : 0;
+    shakeMag.value = rm ? 0 : SHAKE_DEATH;
+    hitstopUntil.value = wallTime.value * 1000 + (rm ? 0 : HITSTOP_MS);
     deathEv.value = deathEv.value + 1;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -252,7 +255,8 @@ export function useGameLoop({ width, height, seed, callbacks }: UseGameLoopArgs)
           if (nm) {
             score.value += 1 + NEAR_MISS_BONUS;
             nearMissEv.value = nearMissEv.value + 1;
-            shakeMag.value = Math.max(shakeMag.value, SHAKE_NEAR_MISS);
+            const rm = reduceMotionSv ? reduceMotionSv.value : 0;
+            if (!rm) shakeMag.value = Math.max(shakeMag.value, SHAKE_NEAR_MISS);
           } else {
             score.value += 1;
             // Only emit the plain score event on clean passes — near-miss

@@ -24,10 +24,20 @@ type Props = {
   stats: Stats;
   dailyMode: boolean;
   dailyBest: number;
+  reduceMotion: boolean;
   onRestart: () => void;
 };
 
-export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, dailyMode, dailyBest, onRestart }) => {
+export const DeathOverlay: React.FC<Props> = ({
+  score,
+  best,
+  isNewBest,
+  stats,
+  dailyMode,
+  dailyBest,
+  reduceMotion,
+  onRestart,
+}) => {
   const flash = useSharedValue(1);
   const panelY = useSharedValue(40);
   const panelOp = useSharedValue(0);
@@ -37,6 +47,16 @@ export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, d
   const countTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    if (reduceMotion) {
+      flash.value = 0;
+      panelY.value = 0;
+      panelOp.value = 1;
+      setDisplayScore(score);
+      armTimer.current = setTimeout(() => setRestartArmed(true), RESTART_WINDOW_MS);
+      return () => {
+        if (armTimer.current) clearTimeout(armTimer.current);
+      };
+    }
     flash.value = withSequence(
       withTiming(1, { duration: 0 }),
       withTiming(0, { duration: FLASH_MS, easing: Easing.out(Easing.quad) }),
@@ -45,7 +65,6 @@ export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, d
     panelOp.value = withDelay(80, withTiming(1, { duration: 260 }));
     armTimer.current = setTimeout(() => setRestartArmed(true), RESTART_WINDOW_MS);
 
-    // Animated count-up over ~500ms.
     const steps = Math.max(1, Math.min(60, score));
     const perStep = Math.max(8, Math.floor(500 / steps));
     let cur = 0;
@@ -62,7 +81,7 @@ export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, d
       if (armTimer.current) clearTimeout(armTimer.current);
       if (countTimer.current) clearInterval(countTimer.current);
     };
-  }, [score, flash, panelY, panelOp]);
+  }, [score, flash, panelY, panelOp, reduceMotion]);
 
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
   const panelStyle = useAnimatedStyle(() => ({
@@ -81,17 +100,30 @@ export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, d
           if (!restartArmed) return;
           onRestart();
         }}
+        accessibilityRole="button"
+        accessibilityLabel={
+          restartArmed
+            ? `Score ${score}${isNewBest ? ', new personal best' : `, best ${best}`}. Tap anywhere to retry.`
+            : `Score ${score}. Restart arming.`
+        }
+        accessibilityHint={restartArmed ? 'Tap anywhere to start a new run' : undefined}
       >
         <View style={styles.dim} />
         <Animated.View style={[styles.panel, panelStyle]}>
-          <Text style={styles.label}>SCORE</Text>
-          <Text style={[styles.score, { color: scoreColor, textShadowColor: scoreColor }]}>{displayScore}</Text>
+          <Text style={styles.label} accessible={false}>SCORE</Text>
+          <Text
+            style={[styles.score, { color: scoreColor, textShadowColor: scoreColor }]}
+            allowFontScaling={false}
+            accessible={false}
+          >
+            {displayScore}
+          </Text>
           {isNewBest ? (
             <View style={styles.newBestPill}>
-              <Text style={styles.newBestText}>NEW BEST</Text>
+              <Text style={styles.newBestText} allowFontScaling={false}>NEW BEST</Text>
             </View>
           ) : (
-            <Text style={styles.bestSub}>BEST {best}</Text>
+            <Text style={styles.bestSub} accessible={false}>BEST {best}</Text>
           )}
           <View style={styles.statsRow}>
             <Stat label="RUNS" value={stats.sessionRuns} />
@@ -100,7 +132,11 @@ export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, d
             {dailyMode ? <Stat label="DAILY" value={dailyBest} /> : null}
           </View>
           <View style={styles.hintWrap}>
-            <Text style={[styles.hint, { opacity: restartArmed ? 1 : 0.35 }]}>
+            <Text
+              style={[styles.hint, { opacity: restartArmed ? 1 : 0.35 }]}
+              allowFontScaling={false}
+              accessible={false}
+            >
               {restartArmed ? 'TAP ANYWHERE TO RETRY' : '…'}
             </Text>
           </View>
@@ -111,9 +147,9 @@ export const DeathOverlay: React.FC<Props> = ({ score, best, isNewBest, stats, d
 };
 
 const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
-  <View style={styles.stat}>
-    <Text style={styles.statLabel}>{label}</Text>
-    <Text style={styles.statValue}>{value}</Text>
+  <View style={styles.stat} accessibilityLabel={`${label} ${value}`}>
+    <Text style={styles.statLabel} accessible={false}>{label}</Text>
+    <Text style={styles.statValue} accessible={false} allowFontScaling={false}>{value}</Text>
   </View>
 );
 

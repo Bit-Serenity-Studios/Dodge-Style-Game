@@ -84,17 +84,32 @@ export const HUD: React.FC<Props> = ({ score, streak, streakTier, best, isNewBes
   return (
     <>
       <View style={styles.topBar} pointerEvents="none">
-        <Text style={[styles.bestText, { color: bestColor }]}>BEST: {best}</Text>
+        <Text
+          style={[styles.bestText, { color: bestColor }]}
+          accessibilityLabel={`Best score ${best}`}
+          allowFontScaling={false}
+        >
+          BEST: {best}
+        </Text>
       </View>
       <View style={styles.centerTop} pointerEvents="none">
         <Animated.Text
           style={[styles.scoreText, isNewBest && { color: NEW_BEST_GOLD, textShadowColor: NEW_BEST_GOLD }, scoreStyle]}
+          accessibilityLabel={`Score ${displayScore}${isNewBest ? ', new best' : ''}`}
+          accessibilityLiveRegion="polite"
+          allowFontScaling={false}
         >
           {displayScore}
         </Animated.Text>
         {displayStreak >= STREAK_TIERS[0] ? (
           <View style={styles.streakWrap}>
-            <Text style={styles.streakText}>{displayStreak}× COMBO</Text>
+            <Text
+              style={styles.streakText}
+              accessibilityLabel={`${displayStreak} combo`}
+              allowFontScaling={false}
+            >
+              {displayStreak}× COMBO
+            </Text>
             <View style={styles.streakBar}>
               <Animated.View style={[styles.streakFill, barStyle]} />
             </View>

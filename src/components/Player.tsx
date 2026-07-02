@@ -23,11 +23,12 @@ type Props = {
   rot: SharedValue<number>;
   phase: SharedValue<number>; // 0=idle 1=play 2=dying 3=dead
   streakTier: SharedValue<number>;
+  reduceMotion: boolean;
 };
 
 const TRAIL_MAX = 26;
 
-export const Player: React.FC<Props> = ({ x, y, rot, phase, streakTier }) => {
+export const Player: React.FC<Props> = ({ x, y, rot, phase, streakTier, reduceMotion }) => {
   // Trail buffer: shared values sampled from y at increasing lags.
   const trailY: SharedValue<number>[] = [];
   const trailX: SharedValue<number>[] = [];
@@ -63,6 +64,13 @@ export const Player: React.FC<Props> = ({ x, y, rot, phase, streakTier }) => {
   const idleBob = useSharedValue<number>(0);
   const idlePulse = useSharedValue<number>(1);
   useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(idleBob);
+      cancelAnimation(idlePulse);
+      idleBob.value = 0;
+      idlePulse.value = 1;
+      return;
+    }
     idleBob.value = withRepeat(
       withSequence(withTiming(-8, { duration: 900 }), withTiming(8, { duration: 900 })),
       -1,
@@ -77,7 +85,7 @@ export const Player: React.FC<Props> = ({ x, y, rot, phase, streakTier }) => {
       cancelAnimation(idleBob);
       cancelAnimation(idlePulse);
     };
-  }, [idleBob, idlePulse]);
+  }, [idleBob, idlePulse, reduceMotion]);
 
   const orbStyle = useAnimatedStyle(() => {
     const idle = phase.value === 0 ? 1 : 0;

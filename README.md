@@ -23,6 +23,12 @@ Type-check:
 npm run typecheck
 ```
 
+Run tests:
+
+```bash
+npm test
+```
+
 ## Play
 
 - Tap anywhere to flap. Everything is one tap.
@@ -162,3 +168,158 @@ sequence, tracked as a separate best.
 **No half-finished stubs.** Everything you can trigger has a
 visual + audio + haptic response (see `GameScreen.onScore`,
 `onDeath`, `onSurgeWarn`, `onFlap`).
+
+## Production-readiness
+
+### Accessibility
+
+- **Screen readers** — every interactive control (daily-run toggle,
+  settings gear, settings switches, death-screen retry hit-area) has
+  `accessibilityRole`, `accessibilityLabel`, and where useful
+  `accessibilityHint`. HUD score exposes `accessibilityLiveRegion="polite"`
+  so VoiceOver / TalkBack announce score changes.
+- **Contrast** — palette lives in `src/constants/colors.ts` with
+  measured contrast ratios; every text/background pair is 8:1 or
+  better (AAA) against the near-black background.
+- **Not color-only** — streak progression is a combo bar with numeric
+  `N× COMBO` text, not just a hue shift. Score is a number. Near-miss
+  is the word "CLOSE!". Nothing important is signaled by color alone.
+- **Dynamic type** — informational text scales with system font size.
+  Layout-critical numerals (giant score, `TAP TO START`, HUD score)
+  use `allowFontScaling={false}` so scaled system fonts don't shatter
+  the layout — the tradeoff is standard practice for numeric HUDs.
+- **Reduce Motion** — `useSettings` reads
+  `AccessibilityInfo.isReduceMotionEnabled()` and subscribes to changes.
+  When active it disables camera shake, freeze-frame, idle bob/pulse,
+  the death panel spring, and confetti/spark bursts. Users can also
+  toggle it manually from the settings sheet.
+- **Tap targets** — daily toggle, settings gear, settings switches,
+  and the "DONE" button all have `minHeight: 44+` (iOS 44pt / Android
+  48dp). Main gameplay tap target is the entire screen.
+- **Mute** — sound and haptics each have their own toggle in the
+  settings sheet, persisted to AsyncStorage under `nd.settings.v1`.
+
+### Security & privacy
+
+- **No secrets, no network.** There are zero fetch/URL calls and zero
+  API keys in the codebase. `git grep -i "api.key\|secret\|token"`
+  returns nothing.
+- **No sensitive local data.** AsyncStorage holds: all-time best,
+  daily best per date key, and settings JSON. All integers or
+  booleans — nothing PII-adjacent.
+- **Input validation** — every AsyncStorage read is gated by
+  `safeParseNonNegInt` (see `src/utils/safeStorage.ts`): non-numeric,
+  negative, NaN, Infinity, and 1000-digit strings all get clamped or
+  reset to 0. Corrupt storage from an aborted write or a downgrade
+  cannot crash the game. Settings JSON parse errors reset to defaults.
+- **Privacy policy draft** — `PRIVACY.md`. Prefilled to declare "no
+  data collected" for both the App Store Privacy Nutrition Label and
+  Google Play Data Safety. If you later add an ad SDK, that document
+  needs updating **before** submission.
+- **Ad/IAP SDKs not wired.** When you add them, the Data Safety form
+  entries will need to change; the current form claims no data
+  collection, which stops being true the moment AdMob is added.
+
+### Performance
+
+- **60 fps** — all per-frame values are Reanimated shared values
+  updated on the UI thread. React state changes only on discrete
+  events (score, near-miss, tier-up, death, surge). No `Animated.Text`
+  driven by shared values (bridged via `useAnimatedReaction` → JS
+  state only when the integer changes). Pipes and particles are a
+  fixed-size pool of shared values — no per-frame render.
+- **Cold start** — audio synthesis + FS writes happen inside a
+  `useEffect` on mount, non-blocking. The game is interactive
+  immediately; if the user taps before audio is ready, `play()` is
+  a no-op (silent fallback).
+- **Memory** — particle pool is fixed at 60. Pipe pool is fixed at
+  4. Trail pool is fixed at 26. Pitched-tick audio pool is bounded
+  by `SCORE_TICK_RESET / SCORE_TICK_CYCLE = 5` distinct pitches.
+  Timers/intervals are cleaned up in `useEffect` returns.
+- **Bundle** — every declared dependency is imported in at least one
+  source file. No transitive bloat from unused SDKs.
+
+### Error handling & edge cases
+
+- **Corrupt / missing storage** — every read uses `safeParseNonNegInt`
+  or a JSON coerce with defaults. First-launch (missing key) returns 0
+  cleanly. Zero try/catch is missing on any read or write.
+- **Rapid taps** — `tap()` is a worklet that just checks phase and
+  sets `vy`; no possible state corruption from 20 taps in 200ms.
+- **Backgrounding mid-run** — `AppState` listener flips the game to
+  the death state on `background`/`inactive` transitions instead of
+  letting the player silently fall while offscreen.
+- **Timezone / midnight rollover** — daily-run seed is re-derived on
+  `AppState.active` and the daily key updates only if the calendar day
+  changed. A user traveling east across the international date line
+  will simply see today's new (empty) daily best on return, not a
+  stale one.
+- **`dt` spike** — the frame callback clamps `dt` to 250 ms so a
+  device that stalls does not send the player 1500 px down in one step.
+- **Storage write failure** — writes are wrapped in try/catch; the
+  next run silently records against the stale in-memory best. No crash,
+  no data-loss modal for the player.
+
+### Polish
+
+- **First-run hint** — StartScreen shows a small "Tap anywhere to
+  flap. Fly through the gaps." line on the first cold start. Dismissed
+  permanently on the first death.
+- **Consistent theme** — `src/constants/colors.ts` centralises the
+  palette. Some components still reference literal hex codes for
+  historical reasons — safe to refactor toward `colors.*` any time.
+- **App icon / splash screen** — Expo will fall back to placeholders
+  if you don't provide assets. To ship for real, drop:
+    - `assets/icon.png` (1024×1024, PNG)
+    - `assets/splash.png` (1284×2778 iOS / any Android size)
+    - `assets/adaptive-icon.png` (1024×1024 foreground for Android)
+  then wire them in `app.json` under `expo.icon`, `expo.splash.image`,
+  `expo.android.adaptiveIcon.foregroundImage`. Left out of this repo
+  because we have no image-authoring surface here; **decision needed**
+  on final icon art.
+- **Death screen** feels complete: score with animated count-up, gold
+  new-best treatment, session run count, session best, all-time best,
+  and (in Daily mode) daily best.
+
+### Testing
+
+- **Unit tests** cover the deterministic core: difficulty curves
+  (monotonicity + asymptotic bounds), RNG (determinism, distribution,
+  range), storage validation (safe parse of null/NaN/Infinity/negative/
+  1000-digit inputs).
+  Run: `npm test` — 39 tests across 3 suites, all green.
+- **Not yet covered (flagged, not blocked):** RN-runtime UI tests
+  (would need `jest-expo` + Testing Library setup) and Detox e2e.
+  Given the game is a single-screen tap-only loop, manual pass on
+  device is a defensible bar; add e2e when you introduce screens with
+  meaningful navigation. **Decision needed**: is manual-device QA
+  enough for launch, or do you want e2e coverage before submission?
+
+### App Store / Play compliance
+
+- **Copy** — "Neon Dodge" and the in-app strings avoid the words
+  "addictive" and "endless fun" that some store review teams flag.
+- **Age rating** — 4+ / Everyone / IARC 3. No violence, gambling,
+  UGC, or web content.
+- **Ad content compliance** — no ads shipped. When you add an ad
+  SDK: set COPPA/GDPR flags, add an ATT prompt on iOS, and re-declare
+  Data Safety.
+
+### Decisions I need from you
+
+1. **App icon and splash art.** Placeholder-only right now — I have no
+   authoring surface for the final PNGs. If you have art, drop them
+   under `assets/` and I'll wire the `app.json` entries.
+2. **e2e tests before submission?** Manual on-device is a reasonable
+   bar for a one-screen tap game; happy to add Detox if you want it
+   before launch.
+3. **Publisher contact email** for `PRIVACY.md` (currently
+   `{{TODO: your email}}`).
+4. **Bundle identifier + display name.** Current placeholders
+   are `com.dodgestyle.neondodge` / `Neon Dodge` — confirm or override
+   before we take a build to TestFlight/internal track.
+5. **Localization?** All UI copy is currently hard-coded English.
+   Wire i18n now (cheap) or later (a bit more churn)?
+6. **Ad monetization SDK choice** (AdMob vs AppLovin vs none). Not
+   wired yet — flagging so the Data Safety form and ATT prompt work
+   don't blindside you at submission time.

@@ -1,14 +1,17 @@
 /**
  * Top-level game screen. Composes all subsystems:
- *   - useGameLoop (physics on UI thread)
- *   - Persistence hook (AsyncStorage best + session stats + daily)
- *   - Audio layer (SFX)
- *   - Reactive components (HUD, overlays, particles, edge glow)
+ *   - useGameLoop        physics on UI thread
+ *   - usePersistence     AsyncStorage best + session stats + daily
+ *   - useSettings        sound / haptics / reduce-motion
+ *   - audio layer        SFX
+ *   - reactive components (HUD, overlays, particles, edge glow)
  *
- * Handles: input → tap; discrete event callbacks → haptics/audio/pops.
+ * Discrete-event JS callbacks translate score/near-miss/tier/surge/flap/death
+ * into haptics + audio + juice, all gated by user settings.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -19,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useGameLoop } from '../hooks/useGameLoop';
 import { usePersistence } from '../hooks/usePersistence';
+import { useSettings } from '../hooks/useSettings';
 import { ensureLoaded, play, playTick } from '../audio';
 import { randomSeed, todaySeed } from '../utils/rng';
 
@@ -32,9 +36,12 @@ import { NearMissPopup, NearMissRef } from './NearMissPopup';
 import { NewBestBanner, NewBestBannerRef } from './NewBestBanner';
 import { ParticleSystem, ParticleSystemHandle } from './ParticleSystem';
 import { StreakEdgeGlow, IncomingWarn, SurgeWarnLayer } from './EdgeGlow';
+import { SettingsSheet } from './SettingsSheet';
 import { PLAYER_X_FRAC, SURGE_WARN_DURATION } from '../constants/tuning';
 
 type OverlayPhase = 'idle' | 'playing' | 'dead';
+
+const FIRST_RUN_KEY = 'nd.firstRunDone';
 
 export const GameScreen: React.FC = () => {
   const { width, height } = useWindowDimensions();
@@ -44,120 +51,158 @@ export const GameScreen: React.FC = () => {
   const [runNewBest, setRunNewBest] = useState(false);
   const [runFinalScore, setRunFinalScore] = useState(0);
   const [surgeVisible, setSurgeVisible] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [firstRun, setFirstRun] = useState(false);
   const surgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const runBestRef = useRef(0); // best at run start (for detecting new best mid-run)
+  const runBestRef = useRef(0);
   const nearMissRef = useRef<NearMissRef | null>(null);
   const newBestRef = useRef<NewBestBannerRef | null>(null);
   const particlesRef = useRef<ParticleSystemHandle | null>(null);
   const passedBestThisRunRef = useRef(false);
 
   const { stats, recordRun } = usePersistence(dailyMode);
+  const { settings, update: updateSettings, reduceMotionSv } = useSettings();
 
-  // Preload audio once.
+  // Refs so worklet callbacks always see the current settings without
+  // depending on stale closures.
+  const soundOnRef = useRef(settings.sound);
+  const hapticsOnRef = useRef(settings.haptics);
+  const reduceMotionRef = useRef(settings.reduceMotion);
+  useEffect(() => {
+    soundOnRef.current = settings.sound;
+    hapticsOnRef.current = settings.haptics;
+    reduceMotionRef.current = settings.reduceMotion;
+  }, [settings.sound, settings.haptics, settings.reduceMotion]);
+
+  // Preload audio once (best-effort — silent if it fails).
   useEffect(() => {
     ensureLoaded();
   }, []);
 
-  // Callbacks fired by the UI-thread loop.
+  // First-run flag: show the "how to play" hint on first cold start only.
+  useEffect(() => {
+    (async () => {
+      try {
+        const done = await AsyncStorage.getItem(FIRST_RUN_KEY);
+        if (!done) setFirstRun(true);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  // Helpers that check user settings before firing side effects.
+  const doHaptic = useCallback((fn: () => Promise<unknown>) => {
+    if (!hapticsOnRef.current) return;
+    fn().catch(() => {});
+  }, []);
+  const doPlay = useCallback((key: Parameters<typeof play>[0]) => {
+    if (!soundOnRef.current) return;
+    play(key);
+  }, []);
+  const doTick = useCallback((score: number) => {
+    if (!soundOnRef.current) return;
+    playTick(score);
+  }, []);
+
   const onScore = useCallback(
     (score: number, isNearMiss: boolean) => {
-      // Score tick (pitched).
-      playTick(score);
-      // Haptic.
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      doTick(score);
+      doHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
       if (isNearMiss) {
-        play('nearMiss');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        doPlay('nearMiss');
+        doHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
         nearMissRef.current?.show();
-        // Spark burst near the player.
-        particlesRef.current?.spark(width * PLAYER_X_FRAC, height / 2, '#ffd94a');
+        if (!reduceMotionRef.current) {
+          particlesRef.current?.spark(width * PLAYER_X_FRAC, height / 2, '#ffd94a');
+        }
       } else {
-        play('score');
+        doPlay('score');
       }
-      // Personal best crossed mid-run?
       if (
         !passedBestThisRunRef.current &&
         runBestRef.current > 0 &&
         score > runBestRef.current
       ) {
         passedBestThisRunRef.current = true;
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-        play('milestone');
+        doHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+        doHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+        doPlay('milestone');
         newBestRef.current?.show();
-        particlesRef.current?.confetti(width / 2, height * 0.35);
+        if (!reduceMotionRef.current) {
+          particlesRef.current?.confetti(width / 2, height * 0.35);
+        }
         setRunNewBest(true);
       }
     },
-    [width, height],
+    [width, height, doHaptic, doPlay, doTick],
   );
 
   const onDeath = useCallback(
     (finalScore: number) => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      // Sharp double-buzz.
+      doHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
       setTimeout(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+        doHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
       }, 80);
-      play('death');
+      doPlay('death');
       setRunFinalScore(finalScore);
       recordRun(finalScore).then(({ newBest }) => {
-        // If newBest was true but we hadn't crossed mid-run (initial 0 best),
-        // still surface the gold state in the death panel.
         if (newBest) setRunNewBest(true);
       });
-      // Match hitstop timing: overlay appears just after freeze frame ends.
-      setTimeout(() => setOverlayPhase('dead'), 80);
+      // Dismiss the first-run hint permanently once the user's completed a run.
+      if (firstRun) {
+        setFirstRun(false);
+        AsyncStorage.setItem(FIRST_RUN_KEY, '1').catch(() => {});
+      }
+      setTimeout(() => setOverlayPhase('dead'), reduceMotionRef.current ? 0 : 80);
     },
-    [recordRun],
+    [recordRun, doHaptic, doPlay, firstRun],
   );
 
   const onSurgeWarn = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    play('surge');
+    doHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
+    doPlay('surge');
     setSurgeVisible(true);
     if (surgeTimerRef.current) clearTimeout(surgeTimerRef.current);
     surgeTimerRef.current = setTimeout(
       () => setSurgeVisible(false),
       Math.round(SURGE_WARN_DURATION * 1000),
     );
-  }, []);
+  }, [doHaptic, doPlay]);
 
   const onFlap = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    play('flap');
-  }, []);
+    doHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+    doPlay('flap');
+  }, [doHaptic, doPlay]);
 
   const onTierUp = useCallback(
     (_tier: number) => {
-      // Streak escalation: rigid haptic + celebration chime + confetti puff
-      // at player. Small, not overwhelming — the visual edge glow is the star.
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      play('milestone');
-      particlesRef.current?.spark(width * PLAYER_X_FRAC, height / 2, '#c17dff');
+      doHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+      doPlay('milestone');
+      if (!reduceMotionRef.current) {
+        particlesRef.current?.spark(width * PLAYER_X_FRAC, height / 2, '#c17dff');
+      }
     },
-    [width, height],
+    [width, height, doHaptic, doPlay],
   );
 
   const gameLoop = useGameLoop({
     width,
     height,
     seed,
+    reduceMotionSv,
     callbacks: useMemo(
       () => ({ onScore, onDeath, onSurgeWarn, onFlap, onTierUp }),
       [onScore, onDeath, onSurgeWarn, onFlap, onTierUp],
     ),
   });
 
-  // Bridge phase shared value -> overlayPhase for start-screen visibility.
   useAnimatedReaction(
     () => gameLoop.phase.value,
     (v, prev) => {
       if (prev === v) return;
       if (v === 0) runOnJS(setOverlayPhase)('idle');
       else if (v === 1) runOnJS(setOverlayPhase)('playing');
-      // v==2 dying — stay in playing until deathEv-driven overlay flip
-      // v==3 dead — overlay flip is done by onDeath timer to match hitstop
     },
   );
 
@@ -187,7 +232,6 @@ export const GameScreen: React.FC = () => {
     setOverlayPhase('idle');
   }, [dailyMode, stats, gameLoop]);
 
-  // Whenever a run begins (idle -> playing), snapshot the current best.
   useEffect(() => {
     if (overlayPhase === 'playing') {
       runBestRef.current = dailyMode ? stats.dailyBest : stats.allTimeBest;
@@ -197,34 +241,47 @@ export const GameScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayPhase]);
 
+  // Backgrounding: pause a mid-run into 'dead' state so we don't have
+  // the player fall while the game is offscreen. Also cancels any pending
+  // surge timer so it doesn't fire while backgrounded.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active' && overlayPhase === 'playing' && gameLoop.phase.value === 1) {
+        // Treat backgrounding as a death — the alternative is silently
+        // resuming after an arbitrary gap which feels broken.
+        // gameLoop.phase = 2 (dying) → 3 (dead) via the frame callback.
+        gameLoop.phase.value = 2;
+      }
+    });
+    return () => sub.remove();
+  }, [overlayPhase, gameLoop]);
+
   const displayBest = dailyMode ? stats.dailyBest : stats.allTimeBest;
 
   return (
     <View style={styles.root}>
       <GestureDetector gesture={tapGesture}>
-        <Animated.View style={[styles.root, shakeStyle]}>
-          {/* Background */}
+        <Animated.View
+          style={[styles.root, shakeStyle]}
+          accessibilityRole={overlayPhase === 'playing' ? 'button' : undefined}
+          accessibilityLabel={overlayPhase === 'playing' ? 'Tap to flap' : undefined}
+        >
           <Starfield width={width} height={height} />
-          {/* Pipes */}
           <Pipes pipes={gameLoop.pipes} width={width} height={height} />
-          {/* Player */}
           <Player
             x={gameLoop.playerX}
             y={gameLoop.py}
             rot={gameLoop.rot}
             phase={gameLoop.phase}
             streakTier={gameLoop.streakTier}
+            reduceMotion={settings.reduceMotion}
           />
-          {/* Particles */}
           <ParticleSystem handleRef={particlesRef} />
-          {/* Edge/warn overlays */}
           <StreakEdgeGlow streakTier={gameLoop.streakTier} />
           <IncomingWarn score={gameLoop.score} />
           <SurgeWarnLayer visible={surgeVisible} />
-          {/* Popups */}
           <NearMissPopup ref={nearMissRef} />
           <NewBestBanner ref={newBestRef} />
-          {/* HUD */}
           {overlayPhase === 'playing' ? (
             <HUD
               score={gameLoop.score}
@@ -236,17 +293,19 @@ export const GameScreen: React.FC = () => {
           ) : null}
         </Animated.View>
       </GestureDetector>
-      {/* Start / Death overlays (outside shake so UI stays legible) */}
       {overlayPhase === 'idle' ? (
         <StartScreen
           best={displayBest}
           dailyMode={dailyMode}
           dailyBest={stats.dailyBest}
+          reduceMotion={settings.reduceMotion}
+          showFirstRunHint={firstRun}
           onToggleDaily={() => {
             const next = !dailyMode;
             setDailyMode(next);
             setSeed(next ? todaySeed() : randomSeed());
           }}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       ) : null}
       {overlayPhase === 'dead' ? (
@@ -257,9 +316,16 @@ export const GameScreen: React.FC = () => {
           stats={stats}
           dailyMode={dailyMode}
           dailyBest={stats.dailyBest}
+          reduceMotion={settings.reduceMotion}
           onRestart={handleRestart}
         />
       ) : null}
+      <SettingsSheet
+        open={settingsOpen}
+        settings={settings}
+        onChange={updateSettings}
+        onClose={() => setSettingsOpen(false)}
+      />
     </View>
   );
 };
