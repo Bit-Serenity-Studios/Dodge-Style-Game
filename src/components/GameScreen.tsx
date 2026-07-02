@@ -38,6 +38,7 @@ import { ParticleSystem, ParticleSystemHandle } from './ParticleSystem';
 import { StreakEdgeGlow, IncomingWarn, SurgeWarnLayer } from './EdgeGlow';
 import { SettingsSheet } from './SettingsSheet';
 import { PLAYER_X_FRAC, SURGE_WARN_DURATION } from '../constants/tuning';
+import { STR } from '../constants/strings';
 
 type OverlayPhase = 'idle' | 'playing' | 'dead';
 
@@ -264,7 +265,7 @@ export const GameScreen: React.FC = () => {
         <Animated.View
           style={[styles.root, shakeStyle]}
           accessibilityRole={overlayPhase === 'playing' ? 'button' : undefined}
-          accessibilityLabel={overlayPhase === 'playing' ? 'Tap to flap' : undefined}
+          accessibilityLabel={overlayPhase === 'playing' ? STR.game.tapToFlapA11y : undefined}
         >
           <Starfield width={width} height={height} />
           <Pipes pipes={gameLoop.pipes} width={width} height={height} />

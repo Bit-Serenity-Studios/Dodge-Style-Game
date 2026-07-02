@@ -6,6 +6,7 @@ import React from 'react';
 import { AccessibilityInfo, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ResolvedSettings } from '../hooks/useSettings';
 import { colors } from '../constants/colors';
+import { STR } from '../constants/strings';
 
 type Props = {
   open: boolean;
@@ -26,49 +27,48 @@ export const SettingsSheet: React.FC<Props> = ({ open, settings, onChange, onClo
       <Pressable
         style={styles.scrim}
         onPress={onClose}
-        accessibilityLabel="Close settings"
+        accessibilityLabel={STR.settings.close}
         accessibilityRole="button"
       >
         <Pressable style={styles.sheet} onPress={() => {}}>
           <Text style={styles.title} accessibilityRole="header">
-            SETTINGS
+            {STR.settings.title}
           </Text>
           <Row
-            label="Sound"
-            hint="SFX and score ticks"
+            label={STR.settings.sound}
+            hint={STR.settings.soundHint}
             value={settings.sound}
             onToggle={(v) => onChange({ sound: v })}
           />
           <Row
-            label="Haptics"
-            hint="Vibration on taps, scores, and death"
+            label={STR.settings.haptics}
+            hint={STR.settings.hapticsHint}
             value={settings.haptics}
             onToggle={(v) => onChange({ haptics: v })}
           />
           <Row
-            label="Reduce motion"
+            label={STR.settings.reduceMotion}
             hint={
               settings.systemReduceMotion
-                ? 'Following your system Reduce Motion setting'
-                : 'Skip camera shake, freeze-frame, and idle bob'
+                ? STR.settings.reduceMotionSystemHint
+                : STR.settings.reduceMotionHint
             }
             value={settings.reduceMotion}
             disabled={settings.systemReduceMotion}
             onToggle={(v) => {
               onChange({ reduceMotionUser: v });
-              // Announce, so users on screen readers know what changed.
               AccessibilityInfo.announceForAccessibility(
-                v ? 'Reduce motion on' : 'Reduce motion off',
+                v ? STR.settings.announceReduceOn : STR.settings.announceReduceOff,
               );
             }}
           />
           <Pressable
             style={styles.closeBtn}
             onPress={onClose}
-            accessibilityLabel="Close settings"
+            accessibilityLabel={STR.settings.close}
             accessibilityRole="button"
           >
-            <Text style={styles.closeText}>DONE</Text>
+            <Text style={styles.closeText}>{STR.settings.done}</Text>
           </Pressable>
         </Pressable>
       </Pressable>

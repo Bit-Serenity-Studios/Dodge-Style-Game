@@ -13,6 +13,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { STR } from '../constants/strings';
 
 export type NewBestBannerRef = { show: () => void };
 
@@ -39,7 +40,7 @@ export const NewBestBanner = forwardRef<NewBestBannerRef, unknown>((_, ref) => {
 
   return (
     <Animated.View pointerEvents="none" style={[styles.wrap, style]}>
-      <Text style={styles.text}>NEW BEST</Text>
+      <Text style={styles.text}>{STR.newBest.banner}</Text>
     </Animated.View>
   );
 });

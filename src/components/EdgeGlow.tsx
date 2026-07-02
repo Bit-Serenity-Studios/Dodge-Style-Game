@@ -7,6 +7,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TRAIL_HUES } from '../constants/tuning';
+import { STR } from '../constants/strings';
 
 const STRIPE = 40;
 
@@ -101,7 +102,10 @@ export const IncomingWarn: React.FC<{ score: SharedValue<number> }> = ({ score }
 };
 
 /** Surge warning band that pulses across the screen for SURGE_WARN_DURATION. */
-export const SurgeWarnLayer: React.FC<{ visible: boolean; label?: string }> = ({ visible, label = 'SURGE INCOMING' }) => {
+export const SurgeWarnLayer: React.FC<{ visible: boolean; label?: string }> = ({
+  visible,
+  label = STR.surge.label,
+}) => {
   if (!visible) return null;
   return (
     <View pointerEvents="none" style={styles.surgeWrap}>

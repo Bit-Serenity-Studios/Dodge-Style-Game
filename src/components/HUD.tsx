@@ -18,6 +18,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { NEW_BEST_GOLD, SCORE_POP_SCALE, STREAK_TIERS } from '../constants/tuning';
+import { STR } from '../constants/strings';
 
 type Props = {
   score: SharedValue<number>;
@@ -86,16 +87,16 @@ export const HUD: React.FC<Props> = ({ score, streak, streakTier, best, isNewBes
       <View style={styles.topBar} pointerEvents="none">
         <Text
           style={[styles.bestText, { color: bestColor }]}
-          accessibilityLabel={`Best score ${best}`}
+          accessibilityLabel={STR.hud.bestCornerA11y(best)}
           allowFontScaling={false}
         >
-          BEST: {best}
+          {STR.hud.bestCorner(best)}
         </Text>
       </View>
       <View style={styles.centerTop} pointerEvents="none">
         <Animated.Text
           style={[styles.scoreText, isNewBest && { color: NEW_BEST_GOLD, textShadowColor: NEW_BEST_GOLD }, scoreStyle]}
-          accessibilityLabel={`Score ${displayScore}${isNewBest ? ', new best' : ''}`}
+          accessibilityLabel={STR.hud.scoreA11y(displayScore, isNewBest)}
           accessibilityLiveRegion="polite"
           allowFontScaling={false}
         >
@@ -105,10 +106,10 @@ export const HUD: React.FC<Props> = ({ score, streak, streakTier, best, isNewBes
           <View style={styles.streakWrap}>
             <Text
               style={styles.streakText}
-              accessibilityLabel={`${displayStreak} combo`}
+              accessibilityLabel={STR.hud.comboA11y(displayStreak)}
               allowFontScaling={false}
             >
-              {displayStreak}× COMBO
+              {STR.hud.combo(displayStreak)}
             </Text>
             <View style={styles.streakBar}>
               <Animated.View style={[styles.streakFill, barStyle]} />

@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FLASH_MS, NEW_BEST_GOLD, RESTART_WINDOW_MS } from '../constants/tuning';
 import type { Stats } from '../hooks/usePersistence';
+import { STR } from '../constants/strings';
 
 type Props = {
   score: number;
@@ -102,15 +103,13 @@ export const DeathOverlay: React.FC<Props> = ({
         }}
         accessibilityRole="button"
         accessibilityLabel={
-          restartArmed
-            ? `Score ${score}${isNewBest ? ', new personal best' : `, best ${best}`}. Tap anywhere to retry.`
-            : `Score ${score}. Restart arming.`
+          restartArmed ? STR.death.a11yArmed(score, isNewBest, best) : STR.death.a11yArming(score)
         }
-        accessibilityHint={restartArmed ? 'Tap anywhere to start a new run' : undefined}
+        accessibilityHint={restartArmed ? STR.death.a11yHintArmed : undefined}
       >
         <View style={styles.dim} />
         <Animated.View style={[styles.panel, panelStyle]}>
-          <Text style={styles.label} accessible={false}>SCORE</Text>
+          <Text style={styles.label} accessible={false}>{STR.death.scoreLabel}</Text>
           <Text
             style={[styles.score, { color: scoreColor, textShadowColor: scoreColor }]}
             allowFontScaling={false}
@@ -120,16 +119,16 @@ export const DeathOverlay: React.FC<Props> = ({
           </Text>
           {isNewBest ? (
             <View style={styles.newBestPill}>
-              <Text style={styles.newBestText} allowFontScaling={false}>NEW BEST</Text>
+              <Text style={styles.newBestText} allowFontScaling={false}>{STR.death.newBestPill}</Text>
             </View>
           ) : (
-            <Text style={styles.bestSub} accessible={false}>BEST {best}</Text>
+            <Text style={styles.bestSub} accessible={false}>{STR.death.bestSub(best)}</Text>
           )}
           <View style={styles.statsRow}>
-            <Stat label="RUNS" value={stats.sessionRuns} />
-            <Stat label="SESSION" value={stats.sessionBest} />
-            <Stat label="ALL-TIME" value={stats.allTimeBest} />
-            {dailyMode ? <Stat label="DAILY" value={dailyBest} /> : null}
+            <Stat label={STR.death.statRuns} value={stats.sessionRuns} />
+            <Stat label={STR.death.statSession} value={stats.sessionBest} />
+            <Stat label={STR.death.statAll} value={stats.allTimeBest} />
+            {dailyMode ? <Stat label={STR.death.statDaily} value={dailyBest} /> : null}
           </View>
           <View style={styles.hintWrap}>
             <Text
@@ -137,7 +136,7 @@ export const DeathOverlay: React.FC<Props> = ({
               allowFontScaling={false}
               accessible={false}
             >
-              {restartArmed ? 'TAP ANYWHERE TO RETRY' : '…'}
+              {restartArmed ? STR.death.retryArmed : STR.death.retryArming}
             </Text>
           </View>
         </Animated.View>

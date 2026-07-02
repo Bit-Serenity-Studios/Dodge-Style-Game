@@ -17,6 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { colors } from '../constants/colors';
+import { STR } from '../constants/strings';
 
 type Props = {
   best: number;
@@ -73,17 +74,17 @@ export const StartScreen: React.FC<Props> = ({
           allowFontScaling={false}
           accessibilityRole="header"
         >
-          NEON DODGE
+          {STR.start.title}
         </Text>
-        <Text style={styles.subtitle} accessibilityLabel={`Best score ${best}`}>
-          BEST {best}
+        <Text style={styles.subtitle} accessibilityLabel={STR.hud.bestCornerA11y(best)}>
+          {STR.start.best(best)}
         </Text>
       </View>
       <Animated.View pointerEvents="none" style={[styles.tapWrap, tapStyle]}>
-        <Text style={styles.tap} allowFontScaling={false}>TAP TO START</Text>
+        <Text style={styles.tap} allowFontScaling={false}>{STR.start.tapToStart}</Text>
         {showFirstRunHint ? (
-          <Text style={styles.hint} accessibilityLabel="Tap anywhere to flap and fly through gaps">
-            Tap anywhere to flap.  Fly through the gaps.
+          <Text style={styles.hint} accessibilityLabel={STR.start.firstRunHint}>
+            {STR.start.firstRunHint}
           </Text>
         ) : null}
       </Animated.View>
@@ -94,16 +95,14 @@ export const StartScreen: React.FC<Props> = ({
           activeOpacity={0.7}
           accessibilityRole="switch"
           accessibilityState={{ checked: dailyMode }}
-          accessibilityLabel="Daily Run"
+          accessibilityLabel={STR.start.dailyOff}
           accessibilityHint={
-            dailyMode
-              ? `Daily run mode is on. Daily best is ${dailyBest}. Double tap to switch to endless.`
-              : 'Daily run mode is off. Double tap to enable the same pipe sequence for everyone today.'
+            dailyMode ? STR.start.dailyA11yOn(dailyBest) : STR.start.dailyA11yOff
           }
         >
           <View style={[styles.dot, dailyMode && styles.dotOn]} />
           <Text style={[styles.toggleLabel, dailyMode && styles.toggleLabelOn]}>
-            DAILY RUN{dailyMode ? `  ·  BEST ${dailyBest}` : ''}
+            {dailyMode ? STR.start.dailyOn(dailyBest) : STR.start.dailyOff}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -111,8 +110,8 @@ export const StartScreen: React.FC<Props> = ({
           style={styles.gear}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="Settings"
-          accessibilityHint="Sound, haptics, and reduce motion"
+          accessibilityLabel={STR.start.settingsA11y}
+          accessibilityHint={STR.start.settingsHintA11y}
         >
           <View style={styles.gearInner}>
             <Text style={styles.gearIcon} allowFontScaling={false}>⚙</Text>

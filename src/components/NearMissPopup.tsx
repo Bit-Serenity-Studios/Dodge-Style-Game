@@ -13,6 +13,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { STR } from '../constants/strings';
 
 export type NearMissRef = { show: (label?: string) => void };
 
@@ -50,7 +51,7 @@ export const NearMissPopup = forwardRef<NearMissRef, unknown>((_, ref) => {
 
   return (
     <Animated.View pointerEvents="none" style={[styles.wrap, style]}>
-      <Animated.Text style={styles.text}>CLOSE!</Animated.Text>
+      <Animated.Text style={styles.text}>{STR.nearMiss.close}</Animated.Text>
     </Animated.View>
   );
 });
