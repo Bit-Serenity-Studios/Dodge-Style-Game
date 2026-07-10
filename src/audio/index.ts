@@ -1,16 +1,12 @@
 /**
- * Audio layer. Loads a pool of SFX at boot; each play() gets a fresh
- * "voice" from a small round-robin pool so overlapping plays don't
- * cut each other off (e.g. rapid score ticks).
+ * Audio layer. Bundled OGG files (Kenney CC0 pack) loaded into small
+ * round-robin voice pools so overlapping plays don't cut each other off.
  *
- * Replace with real assets:
- *   1. drop .wav/.mp3 files in assets/sounds/
- *   2. change the entries in AUDIO_SOURCES to `require(...)` those files
- *   3. delete the runtime WAV synthesis step in ensureLoaded()
+ * The pitched score tick uses a single click file with playback rate
+ * shifted per pitch step (shouldCorrectPitch: false) — one asset,
+ * SCORE_TICK_RESET / SCORE_TICK_CYCLE distinct pitches at runtime.
  */
 import { Audio, AVPlaybackSource } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
-import { synth, encodeWav, bytesToBase64, Voice } from './wav';
 import {
   SCORE_TICK_BASE_FREQ,
   SCORE_TICK_STEP,
@@ -25,94 +21,45 @@ export type SfxKey =
   | 'death'
   | 'milestone'
   | 'surge'
-  | 'tick'; // pitched by score
+  | 'tick';
 
 const POOL_SIZE = 4;
+const TICK_POOL_SIZE = 3;
 
-type Recipe = { voices: Voice[]; dur: number; gain?: number; env?: { attack: number; decay: number; sustain: number; release: number } };
+const SOURCES: Record<SfxKey, AVPlaybackSource> = {
+  flap: require('../../assets/sounds/flap.ogg'),
+  score: require('../../assets/sounds/score.ogg'),
+  nearMiss: require('../../assets/sounds/near-miss.ogg'),
+  death: require('../../assets/sounds/death.ogg'),
+  milestone: require('../../assets/sounds/milestone.ogg'),
+  surge: require('../../assets/sounds/surge.ogg'),
+  tick: require('../../assets/sounds/tick.ogg'),
+};
 
-function tickRecipe(freqHz: number): Recipe {
-  return {
-    voices: [{ type: 'sine', freq: freqHz, freqEnd: freqHz * 1.02 }],
-    dur: 0.06,
-    gain: 0.4,
-    env: { attack: 0.002, decay: 0.02, sustain: 0.4, release: 0.03 },
-  };
-}
-
-const RECIPES: Record<SfxKey, Recipe> = {
-  flap: {
-    voices: [{ type: 'triangle', freq: 380, freqEnd: 240 }],
-    dur: 0.09,
-    gain: 0.45,
-    env: { attack: 0.002, decay: 0.03, sustain: 0.35, release: 0.05 },
-  },
-  score: {
-    voices: [
-      { type: 'sine', freq: 900, freqEnd: 1100 },
-      { type: 'sine', freq: 1400, freqEnd: 1700 },
-    ],
-    dur: 0.12,
-    gain: 0.4,
-    env: { attack: 0.003, decay: 0.04, sustain: 0.5, release: 0.07 },
-  },
-  nearMiss: {
-    voices: [
-      { type: 'sine', freq: 1600, freqEnd: 2200 },
-      { type: 'sine', freq: 2400, freqEnd: 3300 },
-    ],
-    dur: 0.18,
-    gain: 0.5,
-    env: { attack: 0.002, decay: 0.05, sustain: 0.6, release: 0.12 },
-  },
-  death: {
-    voices: [
-      { type: 'noise' },
-      { type: 'square', freq: 220, freqEnd: 60 },
-      { type: 'sine', freq: 90, freqEnd: 40 },
-    ],
-    dur: 0.45,
-    gain: 0.6,
-    env: { attack: 0.001, decay: 0.15, sustain: 0.55, release: 0.28 },
-  },
-  milestone: {
-    voices: [
-      { type: 'sine', freq: 660, freqEnd: 990 },
-      { type: 'triangle', freq: 990, freqEnd: 1320 },
-    ],
-    dur: 0.35,
-    gain: 0.55,
-    env: { attack: 0.005, decay: 0.06, sustain: 0.7, release: 0.22 },
-  },
-  surge: {
-    voices: [
-      { type: 'triangle', freq: 200, freqEnd: 500 },
-      { type: 'sine', freq: 400, freqEnd: 900 },
-    ],
-    dur: 0.55,
-    gain: 0.45,
-    env: { attack: 0.05, decay: 0.1, sustain: 0.6, release: 0.35 },
-  },
-  tick: tickRecipe(SCORE_TICK_BASE_FREQ), // template — real tick uses playTick()
+// Per-key volume trims — Kenney SFX are not level-matched to each other.
+const GAINS: Record<SfxKey, number> = {
+  flap: 0.55,
+  score: 0.6,
+  nearMiss: 0.7,
+  death: 0.75,
+  milestone: 0.65,
+  surge: 0.5,
+  tick: 0.45,
 };
 
 type Voices = { sounds: Audio.Sound[]; idx: number };
-const pools: Partial<Record<SfxKey, Voices>> = {};
+const pools: Partial<Record<Exclude<SfxKey, 'tick'>, Voices>> = {};
+// Tick uses a per-pitch pool — each entry has its rate pre-applied so
+// playback is a single setPositionAsync + playAsync call.
 const tickPools: Map<number, Voices> = new Map();
 
 let ready = false;
 let loading: Promise<void> | null = null;
 
-async function writeAndLoadPool(key: string, recipe: Recipe, size: number): Promise<Voices> {
-  const pcm = synth(recipe.voices, recipe.dur, recipe.env, recipe.gain ?? 0.5);
-  const wav = encodeWav(pcm);
-  const b64 = bytesToBase64(wav);
-  const path = `${FileSystem.cacheDirectory}sfx-${key}.wav`;
-  await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
-  const source: AVPlaybackSource = { uri: path };
+async function loadPool(source: AVPlaybackSource, size: number, volume: number): Promise<Voices> {
   const sounds: Audio.Sound[] = [];
   for (let i = 0; i < size; i++) {
-    const { sound } = await Audio.Sound.createAsync(source, { volume: 1.0 });
+    const { sound } = await Audio.Sound.createAsync(source, { volume });
     sounds.push(sound);
   }
   return { sounds, idx: 0 };
@@ -129,11 +76,17 @@ export async function ensureLoaded(): Promise<void> {
         staysActiveInBackground: false,
         shouldDuckAndroid: true,
       });
-      // Non-tick sounds.
-      const nonTick: SfxKey[] = ['flap', 'score', 'nearMiss', 'death', 'milestone', 'surge'];
+      const nonTick: Array<Exclude<SfxKey, 'tick'>> = [
+        'flap',
+        'score',
+        'nearMiss',
+        'death',
+        'milestone',
+        'surge',
+      ];
       await Promise.all(
         nonTick.map(async (k) => {
-          pools[k] = await writeAndLoadPool(k, RECIPES[k], POOL_SIZE);
+          pools[k] = await loadPool(SOURCES[k], POOL_SIZE, GAINS[k]);
         }),
       );
       ready = true;
@@ -161,19 +114,29 @@ export function play(key: Exclude<SfxKey, 'tick'>): void {
   s.playAsync().catch(() => {});
 }
 
+function tickRateForStep(step: number): number {
+  // freq at step k = base + step * step_hz; rate = freq / base.
+  return (SCORE_TICK_BASE_FREQ + step * SCORE_TICK_STEP) / SCORE_TICK_BASE_FREQ;
+}
+
 /**
  * Pitched tick — rises in pitch every SCORE_TICK_CYCLE points and
- * resets every SCORE_TICK_RESET. Cached lazily per pitch.
+ * resets every SCORE_TICK_RESET. Per-pitch pools are pre-warmed lazily
+ * so subsequent plays are just position + play.
  */
 export async function playTick(score: number): Promise<void> {
   if (!ready) return;
   const step = Math.floor((score % SCORE_TICK_RESET) / SCORE_TICK_CYCLE);
-  const freq = Math.round(SCORE_TICK_BASE_FREQ + step * SCORE_TICK_STEP);
-  let pool = tickPools.get(freq);
+  let pool = tickPools.get(step);
   if (!pool) {
     try {
-      pool = await writeAndLoadPool(`tick-${freq}`, tickRecipe(freq), 3);
-      tickPools.set(freq, pool);
+      pool = await loadPool(SOURCES.tick, TICK_POOL_SIZE, GAINS.tick);
+      const rate = tickRateForStep(step);
+      // shouldCorrectPitch: false → rate change is a resample, i.e. pitch shift.
+      await Promise.all(
+        pool.sounds.map((s) => s.setRateAsync(rate, false).catch(() => {})),
+      );
+      tickPools.set(step, pool);
     } catch {
       return;
     }

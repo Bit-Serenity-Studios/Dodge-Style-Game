@@ -26,7 +26,7 @@ export const STR = {
     dailyA11yOn: (best: number) =>
       `Daily run mode is on. Daily best is ${best}. Double tap to switch to endless.`,
     settingsA11y: 'Settings',
-    settingsHintA11y: 'Sound, haptics, and reduce motion',
+    settingsHintA11y: 'Sound, music, haptics, and reduce motion',
   },
   hud: {
     bestCorner: (n: number) => `BEST: ${n}`,
@@ -65,6 +65,8 @@ export const STR = {
     title: 'SETTINGS',
     sound: 'Sound',
     soundHint: 'SFX and score ticks',
+    music: 'Music',
+    musicHint: 'Background music loop',
     haptics: 'Haptics',
     hapticsHint: 'Vibration on taps, scores, and death',
     reduceMotion: 'Reduce motion',

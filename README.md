@@ -4,8 +4,9 @@ An endless one-tap dodge game (Flappy Bird lineage) built with Expo (managed
 workflow), React Native, TypeScript and Reanimated. Physics and rendering run
 entirely on the UI thread via `useFrameCallback` and shared values — no
 per-frame React state, no bridge crossings. All persistence is local
-(AsyncStorage). All SFX are synthesized in-JS at boot and cached to disk;
-swap them for real assets by editing `src/audio/index.ts`.
+(AsyncStorage). SFX and background music are bundled OGG files from the
+[Kenney](https://kenney.nl) CC0 audio packs; the pitched score tick uses
+`setRateAsync` on `expo-av` for runtime pitch shifting off a single click.
 
 ## Run it
 
@@ -53,8 +54,8 @@ src/
     difficulty.ts     asymptotic curves (speed, gap, variance, spacing)
     rng.ts            mulberry32, todaySeed, randomSeed
   audio/
-    wav.ts            pure-JS WAV encoder + base64
-    index.ts          preload SFX pool, play(), playTick()
+    index.ts          preload SFX pool, play(), playTick() (pitched)
+    music.ts          background music player (menu / gameplay loops)
   hooks/
     useGameLoop.ts    fixed-timestep frame callback, physics, collision,
                       near-miss detection, surge trigger, event bridges
@@ -136,17 +137,25 @@ Every curve is asymptotic. See `utils/difficulty.ts`.
 
 ## Audio
 
-`src/audio/wav.ts` is a tiny pure-JS WAV encoder. `index.ts` synthesizes a
-handful of short PCM buffers at boot, writes them to
-`FileSystem.cacheDirectory`, and preloads a small round-robin pool of
-`expo-av` `Audio.Sound` voices per SFX so that rapid plays overlap
-cleanly instead of cutting each other off.
+Bundled OGG files under `assets/sounds/` (SFX) and `assets/music/`
+(background loops), all from the [Kenney](https://kenney.nl) CC0 audio
+packs (attribution is not required by CC0 but is included in
+`assets/sounds/LICENSE.txt` and `assets/music/LICENSE.txt`).
 
-To swap in real audio files:
-1. Drop `.wav` / `.mp3` files under `assets/sounds/`.
-2. In `audio/index.ts`, replace the `RECIPES` for those keys with
-   `require('../../assets/sounds/foo.wav')` and set the source directly
-   in `writeAndLoadPool` (skip the synthesis + FS write).
+`src/audio/index.ts` preloads a small round-robin pool of `expo-av`
+`Audio.Sound` voices per SFX so rapid plays overlap cleanly instead of
+cutting each other off. The pitched score tick uses one bundled click
+whose playback rate is shifted per step via
+`setRateAsync(rate, /*shouldCorrectPitch*/ false)` — one asset,
+`SCORE_TICK_RESET / SCORE_TICK_CYCLE` distinct pitches at runtime.
+
+`src/audio/music.ts` runs two looping tracks (menu, gameplay) with only
+one active at a time. Music pauses on backgrounding and resumes on
+foreground, and is gated by the `music` setting toggle (defaults on).
+
+To swap in different audio, replace the OGG files at those paths — the
+`require()` sources in `index.ts` / `music.ts` will pick them up on the
+next Metro bundle. Per-key gain trims live in `GAINS` in `index.ts`.
 
 ## Architecture notes
 
@@ -196,8 +205,8 @@ visual + audio + haptic response (see `GameScreen.onScore`,
 - **Tap targets** — daily toggle, settings gear, settings switches,
   and the "DONE" button all have `minHeight: 44+` (iOS 44pt / Android
   48dp). Main gameplay tap target is the entire screen.
-- **Mute** — sound and haptics each have their own toggle in the
-  settings sheet, persisted to AsyncStorage under `nd.settings.v1`.
+- **Mute** — sound, music, and haptics each have their own toggle in
+  the settings sheet, persisted to AsyncStorage under `nd.settings.v1`.
 
 ### Security & privacy
 

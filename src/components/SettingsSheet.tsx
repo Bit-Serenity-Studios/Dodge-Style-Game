@@ -41,6 +41,12 @@ export const SettingsSheet: React.FC<Props> = ({ open, settings, onChange, onClo
             onToggle={(v) => onChange({ sound: v })}
           />
           <Row
+            label={STR.settings.music}
+            hint={STR.settings.musicHint}
+            value={settings.music}
+            onToggle={(v) => onChange({ music: v })}
+          />
+          <Row
             label={STR.settings.haptics}
             hint={STR.settings.hapticsHint}
             value={settings.haptics}

@@ -24,6 +24,13 @@ import { useGameLoop } from '../hooks/useGameLoop';
 import { usePersistence } from '../hooks/usePersistence';
 import { useSettings } from '../hooks/useSettings';
 import { ensureLoaded, play, playTick } from '../audio';
+import {
+  loadMusic,
+  playTrack as playMusicTrack,
+  pauseMusic,
+  resumeMusic,
+  setEnabled as setMusicEnabled,
+} from '../audio/music';
 import { randomSeed, todaySeed } from '../utils/rng';
 
 import { Starfield } from './Starfield';
@@ -75,10 +82,22 @@ export const GameScreen: React.FC = () => {
     reduceMotionRef.current = settings.reduceMotion;
   }, [settings.sound, settings.haptics, settings.reduceMotion]);
 
-  // Preload audio once (best-effort — silent if it fails).
+  // Preload SFX + music once (best-effort — silent if it fails).
   useEffect(() => {
     ensureLoaded();
+    loadMusic();
   }, []);
+
+  // Music toggle: enable/disable the player when the setting changes.
+  useEffect(() => {
+    setMusicEnabled(settings.music);
+  }, [settings.music]);
+
+  // Track selection follows overlay phase.
+  useEffect(() => {
+    const track = overlayPhase === 'playing' ? 'gameplay' : 'menu';
+    playMusicTrack(track);
+  }, [overlayPhase]);
 
   // First-run flag: show the "how to play" hint on first cold start only.
   useEffect(() => {
@@ -244,7 +263,8 @@ export const GameScreen: React.FC = () => {
 
   // Backgrounding: pause a mid-run into 'dead' state so we don't have
   // the player fall while the game is offscreen. Also cancels any pending
-  // surge timer so it doesn't fire while backgrounded.
+  // surge timer so it doesn't fire while backgrounded, and pauses music
+  // so it doesn't keep playing in the background.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active' && overlayPhase === 'playing' && gameLoop.phase.value === 1) {
@@ -252,6 +272,11 @@ export const GameScreen: React.FC = () => {
         // resuming after an arbitrary gap which feels broken.
         // gameLoop.phase = 2 (dying) → 3 (dead) via the frame callback.
         gameLoop.phase.value = 2;
+      }
+      if (s === 'active') {
+        resumeMusic();
+      } else {
+        pauseMusic();
       }
     });
     return () => sub.remove();

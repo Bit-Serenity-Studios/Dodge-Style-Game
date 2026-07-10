@@ -14,8 +14,8 @@ anywhere:
 - Your all-time best score (an integer).
 - Your session best score and run count for the current app launch.
 - Your per-day best score for the "Daily Run" mode, keyed by local date.
-- Your app settings: sound on/off, haptics on/off, reduce-motion
-  override.
+- Your app settings: sound on/off, music on/off, haptics on/off,
+  reduce-motion override.
 - A "seen the first-run hint" flag.
 
 We do not collect: device identifiers, IP addresses, contacts,

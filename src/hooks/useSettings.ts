@@ -1,7 +1,8 @@
 /**
- * User settings: sound / haptics / reduce-motion.
+ * User settings: sound / music / haptics / reduce-motion.
  *
- * - Sound + haptics: user toggles, persisted to AsyncStorage. Default on.
+ * - Sound + music + haptics: user toggles, persisted to AsyncStorage.
+ *   Default on.
  * - Reduce Motion: system-driven via AccessibilityInfo; also exposed as a
  *   user override so testing/manual override is possible.
  *
@@ -18,6 +19,7 @@ const K_SETTINGS = 'nd.settings.v1';
 
 export type Settings = {
   sound: boolean;
+  music: boolean;
   haptics: boolean;
   reduceMotionUser: boolean; // user override (false = follow system)
 };
@@ -27,13 +29,14 @@ export type ResolvedSettings = Settings & {
   systemReduceMotion: boolean;
 };
 
-const DEFAULT: Settings = { sound: true, haptics: true, reduceMotionUser: false };
+const DEFAULT: Settings = { sound: true, music: true, haptics: true, reduceMotionUser: false };
 
 function coerce(value: unknown): Settings {
   if (!value || typeof value !== 'object') return { ...DEFAULT };
   const v = value as Record<string, unknown>;
   return {
     sound: typeof v.sound === 'boolean' ? v.sound : DEFAULT.sound,
+    music: typeof v.music === 'boolean' ? v.music : DEFAULT.music,
     haptics: typeof v.haptics === 'boolean' ? v.haptics : DEFAULT.haptics,
     reduceMotionUser: typeof v.reduceMotionUser === 'boolean' ? v.reduceMotionUser : DEFAULT.reduceMotionUser,
   };
