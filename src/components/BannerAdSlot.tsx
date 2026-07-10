@@ -9,10 +9,11 @@
  */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Banner, ADS_ENABLED, BANNER_HEIGHT_PT } from '../ads';
+import { Banner, BANNER_HEIGHT_PT, useAdsActive } from '../ads';
 
 export const BannerAdSlot: React.FC = () => {
-  if (!ADS_ENABLED) return null;
+  const active = useAdsActive();
+  if (!active) return null;
   return (
     <View style={styles.wrap} pointerEvents="box-none">
       <Banner height={BANNER_HEIGHT_PT} />

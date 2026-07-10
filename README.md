@@ -59,8 +59,13 @@ src/
   ads/
     config.ts         ADS_ENABLED, cadence knobs, reserved banner height
     types.ts          AdsAdapter interface — SDK-agnostic contract
-    stub.ts           default no-op adapter with placeholder banner
+    stub.tsx          default no-op adapter with placeholder banner
     index.ts          orchestration: init, banner, interstitial cadence
+  iap/
+    config.ts         IAP_ENABLED, product IDs, fallback price
+    types.ts          IapAdapter interface — SDK-agnostic contract
+    stub.tsx          default dev adapter — Alert-confirm "purchase"
+    index.ts          orchestration: init, purchase, restore, hooks
   hooks/
     useGameLoop.ts    fixed-timestep frame callback, physics, collision,
                       near-miss detection, surge trigger, event bridges
@@ -320,13 +325,31 @@ visual + audio + haptic response (see `GameScreen.onScore`,
   and a between-runs interstitial hook (frequency-capped: every
   `INTERSTITIAL_MIN_RUNS` deaths, minimum `INTERSTITIAL_MIN_INTERVAL_MS`
   spacing, never on the first run of a session). Both currently route
-  through the stub adapter in `src/ads/stub.ts` — a placeholder banner
+  through the stub adapter in `src/ads/stub.tsx` — a placeholder banner
   and a logging interstitial, zero network. To ship real ads: add an
   SDK (`react-native-google-mobile-ads` is the reference), write an
-  adapter next to `stub.ts` implementing `AdsAdapter`, swap the
+  adapter next to `stub.tsx` implementing `AdsAdapter`, swap the
   `adapter =` line in `src/ads/index.ts`, and follow the pre-submission
   checklist in `PRIVACY.md`: ATT prompt on iOS, UMP consent form for
   EU, re-declare Data Safety.
+
+- **Remove Ads IAP** — `src/iap/` wires a one-time non-consumable
+  purchase (product ID `com.dodgestyle.neondodge.remove_ads`, default
+  price `$4.99`). The Settings sheet exposes a **Remove Ads · $4.99**
+  button plus **Restore Purchases** (Apple-mandatory). Purchase
+  entitlement is persisted to AsyncStorage under
+  `nd.iap.removeAds.v1`. `useAdsActive()` and the runtime
+  `isAdsActive()` fuse `ADS_ENABLED` with the entitlement, so the
+  banner disappears, the game area expands, and interstitials skip
+  the moment the purchase completes. The stub adapter in
+  `src/iap/stub.tsx` confirms via a native Alert (no real charge) —
+  swap it for a real SDK adapter (`react-native-iap` or
+  `expo-in-app-purchases`) and update the `adapter =` line in
+  `src/iap/index.ts`. Before submission: create the matching
+  non-consumable product in App Store Connect + Google Play Console
+  with the same product ID, add a Tax + Banking profile (required
+  before IAP works in TestFlight), and add a review-note explaining
+  the purchase and how to test Restore.
 
 ### Decisions I need from you
 

@@ -10,6 +10,7 @@
  * The active adapter is swapped in one place (below) — switch from
  * `stubAdapter` to a real SDK adapter when ready to ship.
  */
+import { useEffect, useState } from 'react';
 import {
   ADS_ENABLED,
   INTERSTITIAL_MIN_INTERVAL_MS,
@@ -18,6 +19,7 @@ import {
 } from './config';
 import { stubAdapter } from './stub';
 import type { AdsAdapter } from './types';
+import { hasRemoveAds, subscribeRemoveAds } from '../iap';
 
 // Swap this line to change SDK. Keep the rest of the app untouched.
 const adapter: AdsAdapter = stubAdapter;
@@ -39,6 +41,26 @@ export function isAdsReady(): boolean {
   return ADS_ENABLED && adapter.isReady();
 }
 
+/**
+ * Runtime "are ads currently shown?" flag — false when the user owns
+ * the Remove Ads entitlement or when ads are compile-time-disabled.
+ * All UI that gates on ad presence should use this (not ADS_ENABLED)
+ * so the state flips instantly on purchase / restore.
+ */
+export function isAdsActive(): boolean {
+  return ADS_ENABLED && !hasRemoveAds();
+}
+
+/** React hook variant of isAdsActive — re-renders on purchase/restore. */
+export function useAdsActive(): boolean {
+  const [active, setActive] = useState<boolean>(isAdsActive());
+  useEffect(() => {
+    const unsub = subscribeRemoveAds(() => setActive(isAdsActive()));
+    return unsub;
+  }, []);
+  return active;
+}
+
 export function preloadInterstitial(): void {
   if (!ADS_ENABLED) return;
   adapter.preloadInterstitial();
@@ -54,7 +76,7 @@ export function setPersonalizedAds(on: boolean): void {
  * Returns when the ad — if any — has been dismissed. Never rejects.
  */
 export async function maybeShowInterstitial(now: number): Promise<boolean> {
-  if (!ADS_ENABLED) return false;
+  if (!isAdsActive()) return false;
   if (!adapter.isReady()) return false;
   runsThisSession += 1;
   runsSinceLastInterstitial += 1;

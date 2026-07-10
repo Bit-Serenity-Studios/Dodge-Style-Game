@@ -36,9 +36,10 @@ import {
   preloadInterstitial,
   maybeShowInterstitial,
   setPersonalizedAds,
-  ADS_ENABLED,
   BANNER_HEIGHT_PT,
+  useAdsActive,
 } from '../ads';
+import { initIap } from '../iap';
 import { randomSeed, todaySeed } from '../utils/rng';
 
 import { Starfield } from './Starfield';
@@ -62,9 +63,11 @@ const FIRST_RUN_KEY = 'nd.firstRunDone';
 
 export const GameScreen: React.FC = () => {
   const { width, height: screenHeight } = useWindowDimensions();
+  const adsActive = useAdsActive();
   // Reserve the bottom of the screen for the banner ad — physics use
   // this reduced height so pipes / player never overlap the ad row.
-  const height = ADS_ENABLED ? screenHeight - BANNER_HEIGHT_PT : screenHeight;
+  // Shrinks to zero when the user owns Remove Ads.
+  const height = adsActive ? screenHeight - BANNER_HEIGHT_PT : screenHeight;
   const [dailyMode, setDailyMode] = useState(false);
   const [seed, setSeed] = useState<number>(() => randomSeed());
   const [overlayPhase, setOverlayPhase] = useState<OverlayPhase>('idle');
@@ -94,11 +97,12 @@ export const GameScreen: React.FC = () => {
     reduceMotionRef.current = settings.reduceMotion;
   }, [settings.sound, settings.haptics, settings.reduceMotion]);
 
-  // Preload SFX + music + ads once (best-effort — silent if it fails).
+  // Preload SFX + music + ads + IAP once (best-effort — silent if it fails).
   useEffect(() => {
     ensureLoaded();
     loadMusic();
     initAds();
+    initIap();
   }, []);
 
   // Bind personalized-ads setting to the ad SDK.

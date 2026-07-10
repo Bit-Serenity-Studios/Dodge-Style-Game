@@ -16,6 +16,9 @@ anywhere:
 - Your per-day best score for the "Daily Run" mode, keyed by local date.
 - Your app settings: sound on/off, music on/off, haptics on/off,
   reduce-motion override, personalized-ads preference.
+- Whether you have purchased the one-time "Remove Ads" upgrade
+  (a single boolean flag; the actual receipt / transaction is
+  validated and stored by the App Store / Google Play, not by us).
 - A "seen the first-run hint" flag.
 
 We do not collect: device identifiers, IP addresses, contacts,

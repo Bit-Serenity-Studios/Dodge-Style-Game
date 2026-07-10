@@ -1,13 +1,25 @@
 /**
- * Modal settings sheet — sound, haptics, reduce-motion overrides.
- * Called from the gear button on StartScreen. Only rendered when open.
+ * Modal settings sheet — sound / music / haptics / reduce-motion +
+ * (when compiled with ads / IAP) personalized-ads toggle, Remove Ads
+ * purchase, and Restore Purchases button. Called from the gear button
+ * on StartScreen. Only rendered when open.
  */
-import React from 'react';
-import { AccessibilityInfo, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import type { ResolvedSettings } from '../hooks/useSettings';
 import { colors } from '../constants/colors';
 import { STR } from '../constants/strings';
 import { ADS_ENABLED } from '../ads';
+import { IAP_ENABLED, buyRemoveAds, restorePurchases, useRemoveAds } from '../iap';
 
 type Props = {
   open: boolean;
@@ -17,6 +29,39 @@ type Props = {
 };
 
 export const SettingsSheet: React.FC<Props> = ({ open, settings, onChange, onClose }) => {
+  const { owned: removeAdsOwned, price: removeAdsPrice } = useRemoveAds();
+  const [busy, setBusy] = useState<'buy' | 'restore' | null>(null);
+
+  const onBuy = useCallback(async () => {
+    if (busy) return;
+    setBusy('buy');
+    try {
+      const result = await buyRemoveAds();
+      if (result === 'error') {
+        Alert.alert(STR.settings.purchaseErrorTitle, STR.settings.purchaseErrorMessage, [
+          { text: STR.settings.okBtn },
+        ]);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }, [busy]);
+
+  const onRestore = useCallback(async () => {
+    if (busy) return;
+    setBusy('restore');
+    try {
+      const { removeAdsRestored } = await restorePurchases();
+      Alert.alert(
+        removeAdsRestored ? STR.settings.restoreOkTitle : STR.settings.restoreNoneTitle,
+        removeAdsRestored ? STR.settings.restoreOkMessage : STR.settings.restoreNoneMessage,
+        [{ text: STR.settings.okBtn }],
+      );
+    } finally {
+      setBusy(null);
+    }
+  }, [busy]);
+
   return (
     <Modal
       transparent
@@ -69,7 +114,7 @@ export const SettingsSheet: React.FC<Props> = ({ open, settings, onChange, onClo
               );
             }}
           />
-          {ADS_ENABLED ? (
+          {ADS_ENABLED && !removeAdsOwned ? (
             <Row
               label={STR.settings.personalizedAds}
               hint={STR.settings.personalizedAdsHint}
@@ -77,6 +122,65 @@ export const SettingsSheet: React.FC<Props> = ({ open, settings, onChange, onClo
               onToggle={(v) => onChange({ personalizedAds: v })}
             />
           ) : null}
+
+          {IAP_ENABLED ? (
+            <>
+              <Text style={styles.sectionHeader} accessibilityRole="header">
+                {STR.settings.removeAdsSection}
+              </Text>
+              {removeAdsOwned ? (
+                <View style={styles.ownedRow} accessibilityLabel={STR.settings.removeAdsOwned}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, styles.ownedLabel]}>
+                      {STR.settings.removeAdsOwned}
+                    </Text>
+                    <Text style={styles.rowHint}>{STR.settings.removeAdsOwnedHint}</Text>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.buyBtn,
+                    pressed && { opacity: 0.7 },
+                    busy === 'buy' && { opacity: 0.6 },
+                  ]}
+                  onPress={onBuy}
+                  disabled={!!busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={STR.settings.removeAdsAvailable(removeAdsPrice)}
+                  accessibilityHint={STR.settings.removeAdsAvailableHint}
+                >
+                  {busy === 'buy' ? (
+                    <ActivityIndicator color={colors.text} />
+                  ) : (
+                    <>
+                      <Text style={styles.buyBtnText}>
+                        {STR.settings.removeAdsAvailable(removeAdsPrice)}
+                      </Text>
+                      <Text style={styles.buyBtnHint}>
+                        {STR.settings.removeAdsAvailableHint}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+              <Pressable
+                style={({ pressed }) => [styles.restoreBtn, pressed && { opacity: 0.5 }]}
+                onPress={onRestore}
+                disabled={!!busy}
+                accessibilityRole="button"
+                accessibilityLabel={STR.settings.restorePurchases}
+                accessibilityHint={STR.settings.restorePurchasesHint}
+              >
+                {busy === 'restore' ? (
+                  <ActivityIndicator color={colors.textDim} size="small" />
+                ) : (
+                  <Text style={styles.restoreBtnText}>{STR.settings.restorePurchases}</Text>
+                )}
+              </Pressable>
+            </>
+          ) : null}
+
           <Pressable
             style={styles.closeBtn}
             onPress={onClose}
@@ -138,6 +242,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
+  sectionHeader: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 4,
+    marginTop: 14,
+    marginBottom: 4,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,6 +259,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(125,183,255,0.14)',
   },
+  ownedRow: {
+    paddingVertical: 12,
+    minHeight: 48,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(125,183,255,0.14)',
+  },
+  ownedLabel: { color: '#ffd94a' },
   rowLabel: { color: colors.text, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   rowHint: { color: colors.textDim, fontSize: 11, marginTop: 2 },
   pill: {
@@ -161,6 +280,46 @@ const styles = StyleSheet.create({
   knob: { width: 22, height: 22, borderRadius: 11 },
   knobOn: { backgroundColor: colors.accent, alignSelf: 'flex-end' },
   knobOff: { backgroundColor: '#7db7ff', alignSelf: 'flex-start' },
+  buyBtn: {
+    marginTop: 8,
+    minHeight: 56,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(125,255,240,0.14)',
+    borderWidth: 1,
+    borderColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buyBtnText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  buyBtnHint: {
+    color: colors.textDim,
+    fontSize: 11,
+    marginTop: 3,
+    textAlign: 'center',
+  },
+  restoreBtn: {
+    marginTop: 8,
+    alignSelf: 'center',
+    minHeight: 44,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  restoreBtnText: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textDecorationLine: 'underline',
+  },
   closeBtn: {
     marginTop: 18,
     alignSelf: 'center',
