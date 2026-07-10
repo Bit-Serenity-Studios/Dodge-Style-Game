@@ -15,7 +15,7 @@ anywhere:
 - Your session best score and run count for the current app launch.
 - Your per-day best score for the "Daily Run" mode, keyed by local date.
 - Your app settings: sound on/off, music on/off, haptics on/off,
-  reduce-motion override.
+  reduce-motion override, personalized-ads preference.
 - A "seen the first-run hint" flag.
 
 We do not collect: device identifiers, IP addresses, contacts,
@@ -24,14 +24,16 @@ purchase history, or crash logs. We do not fingerprint your device.
 
 ## Third parties
 
-Neon Dodge does not use any third-party SDKs at this time. There are no
-ads, no analytics, no crash-reporting services, no attribution
-libraries, no social sign-in.
+Neon Dodge does not use any third-party SDKs in the current build. The
+banner "AD" slot and the between-runs interstitial hook are wired to a
+**stub adapter** that shows a placeholder and no-ops the interstitial —
+no network requests, no identifiers, no data. See `src/ads/README.md`
+for the SDK-swap path.
 
-_If future versions add an ad or analytics SDK, this document and the
-in-app "Settings" screen will be updated **before** that release, and
-any such SDK will be listed on both the App Store "Privacy Nutrition
-Label" and the Google Play "Data Safety" form._
+_When a real ad SDK is wired in (AdMob, AppLovin, etc.), this document
+and the in-app "Settings" screen will be updated **before** that
+release, and the SDK will be listed on both the App Store "Privacy
+Nutrition Label" and the Google Play "Data Safety" form._
 
 ## Children
 

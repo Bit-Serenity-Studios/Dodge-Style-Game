@@ -7,6 +7,7 @@ import { AccessibilityInfo, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import type { ResolvedSettings } from '../hooks/useSettings';
 import { colors } from '../constants/colors';
 import { STR } from '../constants/strings';
+import { ADS_ENABLED } from '../ads';
 
 type Props = {
   open: boolean;
@@ -68,6 +69,14 @@ export const SettingsSheet: React.FC<Props> = ({ open, settings, onChange, onClo
               );
             }}
           />
+          {ADS_ENABLED ? (
+            <Row
+              label={STR.settings.personalizedAds}
+              hint={STR.settings.personalizedAdsHint}
+              value={settings.personalizedAds}
+              onToggle={(v) => onChange({ personalizedAds: v })}
+            />
+          ) : null}
           <Pressable
             style={styles.closeBtn}
             onPress={onClose}

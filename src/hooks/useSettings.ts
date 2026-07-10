@@ -22,6 +22,7 @@ export type Settings = {
   music: boolean;
   haptics: boolean;
   reduceMotionUser: boolean; // user override (false = follow system)
+  personalizedAds: boolean;  // false = request non-personalized ads under GDPR/CCPA/ATT
 };
 
 export type ResolvedSettings = Settings & {
@@ -29,7 +30,13 @@ export type ResolvedSettings = Settings & {
   systemReduceMotion: boolean;
 };
 
-const DEFAULT: Settings = { sound: true, music: true, haptics: true, reduceMotionUser: false };
+const DEFAULT: Settings = {
+  sound: true,
+  music: true,
+  haptics: true,
+  reduceMotionUser: false,
+  personalizedAds: true,
+};
 
 function coerce(value: unknown): Settings {
   if (!value || typeof value !== 'object') return { ...DEFAULT };
@@ -39,6 +46,7 @@ function coerce(value: unknown): Settings {
     music: typeof v.music === 'boolean' ? v.music : DEFAULT.music,
     haptics: typeof v.haptics === 'boolean' ? v.haptics : DEFAULT.haptics,
     reduceMotionUser: typeof v.reduceMotionUser === 'boolean' ? v.reduceMotionUser : DEFAULT.reduceMotionUser,
+    personalizedAds: typeof v.personalizedAds === 'boolean' ? v.personalizedAds : DEFAULT.personalizedAds,
   };
 }
 

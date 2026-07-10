@@ -56,6 +56,11 @@ src/
   audio/
     index.ts          preload SFX pool, play(), playTick() (pitched)
     music.ts          background music player (menu / gameplay loops)
+  ads/
+    config.ts         ADS_ENABLED, cadence knobs, reserved banner height
+    types.ts          AdsAdapter interface — SDK-agnostic contract
+    stub.ts           default no-op adapter with placeholder banner
+    index.ts          orchestration: init, banner, interstitial cadence
   hooks/
     useGameLoop.ts    fixed-timestep frame callback, physics, collision,
                       near-miss detection, surge trigger, event bridges
@@ -310,9 +315,18 @@ visual + audio + haptic response (see `GameScreen.onScore`,
   "addictive" and "endless fun" that some store review teams flag.
 - **Age rating** — 4+ / Everyone / IARC 3. No violence, gambling,
   UGC, or web content.
-- **Ad content compliance** — no ads shipped. When you add an ad
-  SDK: set COPPA/GDPR flags, add an ATT prompt on iOS, and re-declare
-  Data Safety.
+- **Ads plumbing** — `src/ads/` wires a banner slot at the bottom of
+  the screen (physics reserve `BANNER_HEIGHT_PT` so pipes never overlap)
+  and a between-runs interstitial hook (frequency-capped: every
+  `INTERSTITIAL_MIN_RUNS` deaths, minimum `INTERSTITIAL_MIN_INTERVAL_MS`
+  spacing, never on the first run of a session). Both currently route
+  through the stub adapter in `src/ads/stub.ts` — a placeholder banner
+  and a logging interstitial, zero network. To ship real ads: add an
+  SDK (`react-native-google-mobile-ads` is the reference), write an
+  adapter next to `stub.ts` implementing `AdsAdapter`, swap the
+  `adapter =` line in `src/ads/index.ts`, and follow the pre-submission
+  checklist in `PRIVACY.md`: ATT prompt on iOS, UMP consent form for
+  EU, re-declare Data Safety.
 
 ### Decisions I need from you
 

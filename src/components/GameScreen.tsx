@@ -31,6 +31,14 @@ import {
   resumeMusic,
   setEnabled as setMusicEnabled,
 } from '../audio/music';
+import {
+  initAds,
+  preloadInterstitial,
+  maybeShowInterstitial,
+  setPersonalizedAds,
+  ADS_ENABLED,
+  BANNER_HEIGHT_PT,
+} from '../ads';
 import { randomSeed, todaySeed } from '../utils/rng';
 
 import { Starfield } from './Starfield';
@@ -44,6 +52,7 @@ import { NewBestBanner, NewBestBannerRef } from './NewBestBanner';
 import { ParticleSystem, ParticleSystemHandle } from './ParticleSystem';
 import { StreakEdgeGlow, IncomingWarn, SurgeWarnLayer } from './EdgeGlow';
 import { SettingsSheet } from './SettingsSheet';
+import { BannerAdSlot } from './BannerAdSlot';
 import { PLAYER_X_FRAC, SURGE_WARN_DURATION } from '../constants/tuning';
 import { STR } from '../constants/strings';
 
@@ -52,7 +61,10 @@ type OverlayPhase = 'idle' | 'playing' | 'dead';
 const FIRST_RUN_KEY = 'nd.firstRunDone';
 
 export const GameScreen: React.FC = () => {
-  const { width, height } = useWindowDimensions();
+  const { width, height: screenHeight } = useWindowDimensions();
+  // Reserve the bottom of the screen for the banner ad — physics use
+  // this reduced height so pipes / player never overlap the ad row.
+  const height = ADS_ENABLED ? screenHeight - BANNER_HEIGHT_PT : screenHeight;
   const [dailyMode, setDailyMode] = useState(false);
   const [seed, setSeed] = useState<number>(() => randomSeed());
   const [overlayPhase, setOverlayPhase] = useState<OverlayPhase>('idle');
@@ -82,11 +94,17 @@ export const GameScreen: React.FC = () => {
     reduceMotionRef.current = settings.reduceMotion;
   }, [settings.sound, settings.haptics, settings.reduceMotion]);
 
-  // Preload SFX + music once (best-effort — silent if it fails).
+  // Preload SFX + music + ads once (best-effort — silent if it fails).
   useEffect(() => {
     ensureLoaded();
     loadMusic();
+    initAds();
   }, []);
+
+  // Bind personalized-ads setting to the ad SDK.
+  useEffect(() => {
+    setPersonalizedAds(settings.personalizedAds);
+  }, [settings.personalizedAds]);
 
   // Music toggle: enable/disable the player when the setting changes.
   useEffect(() => {
@@ -241,7 +259,10 @@ export const GameScreen: React.FC = () => {
     [gameLoop],
   );
 
-  const handleRestart = useCallback(() => {
+  const handleRestart = useCallback(async () => {
+    // Interstitial ad — frequency-capped inside the ads module. Fires
+    // between runs (retry-tap), never mid-run. Never rejects.
+    await maybeShowInterstitial(Date.now());
     passedBestThisRunRef.current = false;
     setRunNewBest(false);
     setSurgeVisible(false);
@@ -257,6 +278,8 @@ export const GameScreen: React.FC = () => {
       runBestRef.current = dailyMode ? stats.dailyBest : stats.allTimeBest;
       passedBestThisRunRef.current = false;
       setRunNewBest(false);
+      // Warm the next interstitial so it's ready by run end.
+      preloadInterstitial();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayPhase]);
@@ -352,6 +375,7 @@ export const GameScreen: React.FC = () => {
         onChange={updateSettings}
         onClose={() => setSettingsOpen(false)}
       />
+      <BannerAdSlot />
     </View>
   );
 };

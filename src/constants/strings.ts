@@ -72,6 +72,8 @@ export const STR = {
     reduceMotion: 'Reduce motion',
     reduceMotionSystemHint: 'Following your system Reduce Motion setting',
     reduceMotionHint: 'Skip camera shake, freeze-frame, and idle bob',
+    personalizedAds: 'Personalized ads',
+    personalizedAdsHint: 'Off = request non-personalized ads only',
     done: 'DONE',
     close: 'Close settings',
     announceReduceOn: 'Reduce motion on',
