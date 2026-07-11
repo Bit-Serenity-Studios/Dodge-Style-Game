@@ -43,6 +43,7 @@ import { initIap } from '../iap';
 import { randomSeed, todaySeed } from '../utils/rng';
 
 import { Starfield } from './Starfield';
+import { BackgroundEvolution } from './BackgroundEvolution';
 import { Pipes } from './Pipes';
 import { Player } from './Player';
 import { HUD } from './HUD';
@@ -319,6 +320,12 @@ export const GameScreen: React.FC = () => {
           accessibilityRole={overlayPhase === 'playing' ? 'button' : undefined}
           accessibilityLabel={overlayPhase === 'playing' ? STR.game.tapToFlapA11y : undefined}
         >
+          <BackgroundEvolution
+            score={gameLoop.score}
+            width={width}
+            height={height}
+            reduceMotion={settings.reduceMotion}
+          />
           <Starfield width={width} height={height} />
           <Pipes pipes={gameLoop.pipes} width={width} height={height} />
           <Player
